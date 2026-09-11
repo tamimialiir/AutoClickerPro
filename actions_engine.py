@@ -1,39 +1,55 @@
+"""
+Actions execution engine for Auto Clicker Pro.
+Simulates mouse and keyboard automation sequences with timing and position jitter.
+"""
+
 import time
 import random
 import threading
-import tkinter as tk
 from tkinter import messagebox
-from pynput.mouse import Button
-from pynput.keyboard import Key, KeyCode
+from pynput.mouse import Controller as MouseController, Button
+from pynput.keyboard import Controller as KeyboardController
 from utils import parse_key_combo, str_to_key
+from theme import Theme
+from logger import get_logger
+
+logger = get_logger("ActionsEngine")
 
 class ActionsEngine:
-    def get_safe_int(self, var, default, min_val=0, max_val=999999):
-        try:
-            return max(min_val, min(int(var.get()), max_val))
-        except Exception:
-            return default
+    def __init__(self, app):
+        self.app = app
+        self.mouse = MouseController()
+        self.keyboard = KeyboardController()
 
-    def apply_pos_random(self, x, y, pos_rand):
+        self.is_running = False
+        self.is_paused = False
+        self.stop_flag = False
+        self.current_cycle = 0
+        self.current_step_index = 0
+
+    def apply_pos_random(self, x: int, y: int, pos_rand: int) -> tuple:
+        """Apply random position jitter within [-pos_rand, +pos_rand] pixels."""
         if pos_rand <= 0:
             return x, y
         return x + random.randint(-pos_rand, pos_rand), y + random.randint(-pos_rand, pos_rand)
 
-    def wait_if_paused(self):
-        """Block while paused; return True if should abort (stop_flag)."""
+    def wait_if_paused(self) -> bool:
+        """Block execution while paused; return True if sequence was aborted (stop_flag)."""
         while self.is_paused and not self.stop_flag:
             time.sleep(0.05)
         return self.stop_flag
 
-    def get_speed_factor(self):
+    def get_speed_factor(self) -> float:
+        """Retrieve current speed multiplier from app state."""
         try:
-            v = float(self.speed_var.get())
+            v = float(self.app.speed_var.get())
             return max(0.1, min(20.0, v))
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Error reading speed factor, using 1.0: {e}")
             return 1.0
 
-    def interruptible_sleep(self, duration_ms):
-        """Sleep in small chunks so stop/pause can react immediately. Respects global speed."""
+    def interruptible_sleep(self, duration_ms: int):
+        """Sleep in small intervals so stop/pause can react immediately. Respects global speed."""
         if duration_ms <= 0:
             return
         factor = self.get_speed_factor()
@@ -47,84 +63,99 @@ class ActionsEngine:
             remaining = end - time.time()
             time.sleep(min(0.05, max(0, remaining)))
 
-    def perform_click(self, p, pos_rand):
-        x, y = self.apply_pos_random(p["x"], p["y"], pos_rand)
-        hold, typ = p.get("hold", 50), p.get("type", "Left")
+    def perform_click(self, p, pos_rand: int):
+        """Execute a mouse click action."""
+        x, y = self.apply_pos_random(p.get("x", 0), p.get("y", 0), pos_rand)
+        hold = p.get("hold", 50)
+        typ = p.get("type", "Left")
         btn = {"Left": Button.left, "Right": Button.right, "Middle": Button.middle}.get(typ, Button.left)
-        self.mouse.position = (x, y)
-        if typ == "Double":
-            self.mouse.click(btn, 2)
-        else:
-            self.mouse.press(btn)
-            self.interruptible_sleep(hold)
-            self.mouse.release(btn)
 
-    def perform_drag(self, p, pos_rand):
-        sx, sy = self.apply_pos_random(p["x"], p["y"], pos_rand)
-        ex, ey = self.apply_pos_random(p["drag_x"], p["drag_y"], pos_rand)
+        try:
+            self.mouse.position = (x, y)
+            if typ == "Double":
+                self.mouse.click(btn, 2)
+            else:
+                self.mouse.press(btn)
+                self.interruptible_sleep(hold)
+                self.mouse.release(btn)
+        except Exception as e:
+            logger.error(f"Error performing click ({x}, {y}, {typ}): {e}", exc_info=True)
+
+    def perform_drag(self, p, pos_rand: int):
+        """Execute a mouse drag action."""
+        sx, sy = self.apply_pos_random(p.get("x", 0), p.get("y", 0), pos_rand)
+        ex, ey = self.apply_pos_random(p.get("drag_x", 0), p.get("drag_y", 0), pos_rand)
         factor = self.get_speed_factor()
         duration = (p.get("hold", 300) / factor) / 1000.0
-        self.mouse.position = (sx, sy)
-        self.mouse.press(Button.left)
-        steps = max(8, int(duration * 50))
-        for i in range(1, steps + 1):
-            if self.stop_flag or self.wait_if_paused():
-                break
-            t = i / steps
-            self.mouse.position = (sx + int((ex - sx) * t), sy + int((ey - sy) * t))
-            time.sleep(duration / steps)
-        self.mouse.release(Button.left)
+
+        try:
+            self.mouse.position = (sx, sy)
+            self.mouse.press(Button.left)
+            steps = max(8, int(duration * 50))
+            for i in range(1, steps + 1):
+                if self.stop_flag or self.wait_if_paused():
+                    break
+                t = i / steps
+                self.mouse.position = (sx + int((ex - sx) * t), sy + int((ey - sy) * t))
+                time.sleep(duration / steps)
+            self.mouse.release(Button.left)
+        except Exception as e:
+            logger.error(f"Error performing drag from ({sx},{sy}) to ({ex},{ey}): {e}", exc_info=True)
 
     def perform_key(self, p):
-        modifiers, main = parse_key_combo(p.get("key", "a"))
+        """Execute a keyboard action."""
+        key_str = p.get("key", "a")
+        modifiers, main = parse_key_combo(key_str)
         main_obj = str_to_key(main)
+
         try:
             for mod in modifiers:
                 self.keyboard.press(mod)
             try:
                 self.keyboard.press(main_obj)
                 self.keyboard.release(main_obj)
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Direct key object press failed for {main}, falling back to char: {e}")
                 self.keyboard.press(main)
                 self.keyboard.release(main)
             for mod in reversed(modifiers):
                 self.keyboard.release(mod)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to execute key combo '{key_str}': {e}", exc_info=True)
 
-    def perform_scroll(self, p, pos_rand):
+    def perform_scroll(self, p, pos_rand: int):
+        """Execute a mouse scroll action."""
         x, y = self.apply_pos_random(p.get("x", 0), p.get("y", 0), pos_rand)
-        self.mouse.position = (x, y)
-        self.mouse.scroll(p.get("dx", 0), p.get("dy", 0))
+        try:
+            self.mouse.position = (x, y)
+            self.mouse.scroll(p.get("dx", 0), p.get("dy", 0))
+        except Exception as e:
+            logger.error(f"Error performing scroll at ({x},{y}): {e}", exc_info=True)
 
-    def click_loop(self, random_ms, pos_rand, cycles):
+    def click_loop(self, random_ms: int, pos_rand: int, cycles: int):
+        """Main background execution loop."""
+        logger.info(f"Starting click loop: cycles={cycles}, random_ms={random_ms}, pos_rand={pos_rand}")
         cycle = 0
-        if self.infinite.get():
-            max_cycles = float("inf")
-        else:
-            max_cycles = cycles
+        max_cycles = float("inf") if self.app.infinite.get() else cycles
 
         while not self.stop_flag and cycle < max_cycles:
             self.current_cycle = cycle
             idx = 0
-            while idx < len(self.points):
-                if self.stop_flag:
-                    break
-                if self.wait_if_paused():
+            while idx < len(self.app.points):
+                if self.stop_flag or self.wait_if_paused():
                     break
 
-                # Re-validate index after possible list edits during pause
-                if idx >= len(self.points):
+                if idx >= len(self.app.points):
                     break
 
-                p = self.points[idx]
+                p = self.app.points[idx]
                 self.current_step_index = idx
-                total_points = len(self.points)
+                total_points = len(self.app.points)
 
-                self.root.after(0, lambda idx=idx: self.highlight_current(idx))
+                self.app.root.after(0, lambda i=idx: self.app.list_manager.highlight_current(i))
 
-                # Calculate progress percentage
-                if not self.infinite.get():
+                # Calculate progress display
+                if not self.app.infinite.get():
                     total_steps = total_points * max_cycles
                     current_step_num = cycle * total_points + idx + 1
                     pct = int((current_step_num / total_steps) * 100)
@@ -132,7 +163,7 @@ class ActionsEngine:
                 else:
                     prog = f"Cycle {cycle + 1}  |  Step {idx + 1}/{total_points}"
 
-                self.root.after(0, lambda t=prog: self.progress_label.config(text=t))
+                self.app.root.after(0, lambda t=prog: self.app.progress_label.config(text=t))
 
                 action = p.get("action")
                 if action == "wait":
@@ -151,22 +182,18 @@ class ActionsEngine:
                     "key": lambda pt, pr: self.perform_key(pt),
                     "scroll": self.perform_scroll,
                 }
-
                 runner = runners.get(action, self.perform_click)
 
                 for i in range(count):
-                    if self.stop_flag:
-                        break
-                    if self.wait_if_paused():
+                    if self.stop_flag or self.wait_if_paused():
                         break
 
-                    # Re-fetch in case the step was edited during pause
-                    if idx >= len(self.points):
+                    if idx >= len(self.app.points):
                         break
-                    p = self.points[idx]
+                    p = self.app.points[idx]
                     action = p.get("action")
                     if action == "wait":
-                        break  # type changed to wait mid-run; skip to next
+                        break
                     else:
                         runner = runners.get(action, self.perform_click)
                         runner(p, pos_rand)
@@ -181,45 +208,57 @@ class ActionsEngine:
 
         self.is_running = False
         self.is_paused = False
-        self.root.after(0, self.on_clicking_finished)
+        self.app.root.after(0, self.on_clicking_finished)
 
     def start_clicking(self):
-        if not self.points:
+        """Start playing the action sequence."""
+        if not self.app.points:
             messagebox.showwarning("Warning", "Add at least one point!")
             return
-        if self.is_running or self.is_recording:
+        if self.is_running or self.app.recorder_engine.is_recording:
             return
+
         self.is_running = True
         self.is_paused = False
         self.stop_flag = False
         self.current_cycle = 0
         self.current_step_index = 0
-        self.set_ui_lock_state("running")
-        self.status_label.config(text="Running...", fg="#89b4fa")
-        self.progress_label.config(text="")
-        random_ms = self.get_safe_int(self.random_var, 0, 0, 500)
-        pos_rand = self.get_safe_int(self.pos_random_var, 0, 0, 50)
-        cycles = self.get_safe_int(self.rep_var, 1, 1, 99999)
+
+        self.app.set_ui_lock_state("running")
+        self.app.status_label.config(text="Running...", fg=Theme.BLUE)
+        self.app.progress_label.config(text="")
+
+        random_ms = self.app.get_safe_int(self.app.random_var, 0, 0, 500)
+        pos_rand = self.app.get_safe_int(self.app.pos_random_var, 0, 0, 50)
+        cycles = self.app.get_safe_int(self.app.rep_var, 1, 1, 99999)
+
         threading.Thread(target=self.click_loop, args=(random_ms, pos_rand, cycles), daemon=True).start()
 
     def toggle_pause(self):
+        """Toggle pause/resume during execution."""
         if not self.is_running:
             return
         self.is_paused = not self.is_paused
         if self.is_paused:
-            self.set_ui_lock_state("paused")
-            self.status_label.config(text="Paused — edit list freely, then Resume", fg="#f9e2af")
+            self.app.set_ui_lock_state("paused")
+            self.app.status_label.config(text="Paused — edit list freely, then Resume", fg=Theme.YELLOW)
+            logger.info("Sequence paused.")
         else:
-            self.set_ui_lock_state("running")
-            self.status_label.config(text="Running...", fg="#89b4fa")
+            self.app.set_ui_lock_state("running")
+            self.app.status_label.config(text="Running...", fg=Theme.BLUE)
+            logger.info("Sequence resumed.")
 
     def on_clicking_finished(self):
-        self.set_ui_lock_state("stopped")
-        self.clear_highlight()
-        self.status_label.config(text="Stopped", fg="#f38ba8")
-        self.progress_label.config(text="")
+        """Callback invoked when execution finishes or is stopped."""
+        self.app.set_ui_lock_state("stopped")
+        self.app.list_manager.clear_highlight()
+        self.app.status_label.config(text="Stopped", fg=Theme.RED)
+        self.app.progress_label.config(text="")
+        logger.info("Sequence execution finished.")
 
     def stop_clicking(self):
+        """Signal execution loop to terminate."""
         self.stop_flag = True
-        self.is_paused = False  # unblock any wait_if_paused loops
-        self.status_label.config(text="Stopping...", fg="#f9e2af")
+        self.is_paused = False
+        self.app.status_label.config(text="Stopping...", fg=Theme.YELLOW)
+        logger.info("Stop requested by user.")

@@ -1,13 +1,13 @@
-# Auto Clicker Pro (v5.2) 🚀
+# Auto Clicker Pro (v6.0) 🚀
 
 Auto Clicker Pro is a highly sophisticated, modular, and human-like automation utility designed to simulate complex mouse and keyboard sequences through a user-friendly, dark-themed interface based on the popular **Catppuccin** color palette. 
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue?logo=python)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/Version-v5.2-orange)
+![Version](https://img.shields.io/badge/Version-v6.0-orange)
 
-In version **v5.2**, the application framework has been completely re-engineered from the ground up. By transitioning to a professional, industry-standard **Modular Architecture**, the codebase is cleaner, more robust, and exceptionally easy to maintain or extend.
+In version **v6.0**, the application has undergone a fundamental architectural re-engineering. By transitioning to a robust **Composition-based Architecture**, introducing centralized theming, structured rotating file logging, and automated unit testing, the codebase is remarkably resilient, maintainable, and extensible.
 
 ---
 
@@ -132,27 +132,39 @@ Perfect for sharing macros or switching between different tasks.
 
 ---
 
-## ✨ What's New in v5.2
+## ✨ What's New in v6.0
 
-*   **Modular Software Architecture:** The single-file legacy script has been meticulously split into 8 specialized, independent, and clean Python modules. This prevents code truncation, simplifies debugging, and respects object-oriented programming (OOP) principles.
-*   **Smart UI Lock & Safety:** To prevent accidental configuration changes during execution and record, the application automatically locks all inputs, scale bars, jitter entries, and hotkey configuration panels 
+*   **Composition over Inheritance:** Completely replaced the legacy multiple-inheritance God Object with a clean, decoupled Composition architecture. The main controller coordinates specialized engines (`ActionsEngine`, `RecorderEngine`, `ListManager`, `ProfilesManager`, `HotkeyManager`) with clear separation of concerns.
+*   **Centralized Theme Engine:** All Catppuccin Mocha color tokens and fonts are unified in `theme.py`, eliminating duplicate hardcoded values.
+*   **Structured Logging & Error Handling:** Replaced silent error swallowing (`except: pass`) with comprehensive logging via rotating file handlers (`~/.autoclickerpro/logs/app.log`) and console output.
+*   **Type-Safe Action Models:** Actions and macro points are backed by `ActionPoint` Dataclasses with input validation, while maintaining 100% backward compatibility with existing profile JSON formats.
+*   **Decoupled Subsystems:** Extracted global hotkey listening (`hotkey_manager.py`), GitHub release checking (`updater.py`), and OS layout handling (`system_utils.py`) into dedicated single-responsibility modules.
+*   **Automated Test Suite:** Added a full unit and integration test suite (`tests/`) ensuring regression-free execution loops, jitter math, persistence, and UI dialogs.
 
 ---
 
 ## 📂 Modular Project Structure
 
-The project now comprises the following organized file structure, coupled via **Multiple Inheritance** in the main execution class:
+The project comprises the following organized file structure, coupled cleanly via **Composition**:
 
 | File Name | Technical Responsibility |
 | :--- | :--- |
-| **`main.py`** | The main launcher and entry point. It dynamically resolves versioned files and compiles the final `AutoClicker` class by inheriting all modular behaviors. |
-| **`gui_layout.py`** | Handles the visual layout, Tkinter style mapping, widgets, Catppuccin color theme configurations, and the recursive UI قفل state manager (`set_ui_lock_state`). |
-| **`actions_engine.py`** | The simulation core. Manages the multi-threaded execution loop, coordinate randomization (jitter), and physical mouse clicking, smooth dragging, scrolling, and keyboard actions alongside interruptible sleep routines. |
-| **`recorder_engine.py`** | Manages live physical peripheral tracking. Features precise millisecond-level delay logging and the smart noise-filtering algorithm for UI-triggered stops. |
-| **`profiles_manager.py`** | Handles profile persistence (saving/loading JSON macro sheets), global hotkey listening, dynamic system language layout shifting, and GitHub update checking. |
-| **`popups.py`** | Holds all the custom modal dialog forms (`Toplevel`) for creating, configuring, and editing sequence steps, complete with transient bindings and real-time pynput capturing. |
-| **`gui_components.py`** | Small reusable visual elements, including the custom-delayed `ToolTip` class and the dual-ring translucent on-screen drag handles. |
-| **`utils.py`** | Global constants, helper utilities for PyInstaller resource path translation (`resource_path`), keyboard modifier string parsers, and style maps. |
+| **`main.py`** | Application coordinator (`AutoClickerApp`). Orchestrates subsystem instances, manages window lifecycle, and wires global events. |
+| **`theme.py`** | Centralized Catppuccin Mocha theme definitions, color constants, and typography. |
+| **`logger.py`** | Application logging infrastructure with rotating file handlers and console stream formatting. |
+| **`models.py`** | Data models (`ActionPoint`) with type hints, serialization (`to_dict`, `from_dict`), and dictionary compatibility layers. |
+| **`actions_engine.py`** | Simulation engine managing multi-threaded playback loops, speed scaling, jitter offsets, and peripheral dispatching. |
+| **`recorder_engine.py`** | Real-time event recording engine tracking mouse clicks, drags, scrolls, and keystrokes with noise filtering. |
+| **`list_manager.py`** | Point sequence management, drag-and-drop reordering, copy/cut/paste clipboard operations, and visual list styling. |
+| **`profiles_manager.py`** | Profile persistence manager handling JSON serialization, validation, and disk I/O. |
+| **`hotkey_manager.py`** | Global background keyboard shortcut listener and dynamic re-binding manager. |
+| **`updater.py`** | Asynchronous GitHub release checker comparing SemVer tags. |
+| **`system_utils.py`** | Platform-specific utilities including Windows keyboard layout enforcement and screen centering. |
+| **`gui_layout.py`** | Main window widget layout, ttk styling, tooltips, and state locking manager (`set_ui_lock_state`). |
+| **`gui_components.py`** | Reusable UI components including the delayed `ToolTip` and on-screen draggable crosshair preview markers. |
+| **`popups.py`** | Modal dialog windows for adding and editing actions with live coordinate capture and preview handles. |
+| **`utils.py`** | Resource path resolution for PyInstaller bundles and physical key mapping translations. |
+| **`tests/`** | Automated test suite verifying data models, persistence, jitter math, and popup integration. |
 
 ---
 
@@ -169,4 +181,4 @@ If you find a bug or have a feature idea, open an issue.
 
 Made with ❤️ for automation lovers
 
-**Version:** v5.2 | **Theme:** Catppuccin Dark | **Author:** [TamimiAliIR](https://github.com/tamimialiir)
+**Version:** v6.0 | **Theme:** Catppuccin Dark | **Author:** [TamimiAliIR](https://github.com/tamimialiir)
