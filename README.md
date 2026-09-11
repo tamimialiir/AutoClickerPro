@@ -34,7 +34,7 @@ In version **v6.0**, the application has undergone a fundamental architectural r
 
 
 ## Screenshots
-![Main Window](screenshots/main_5.2.png)
+![Main Window](screenshots/main_6.0.png)
 
 ---
 
