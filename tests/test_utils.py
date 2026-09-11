@@ -24,6 +24,7 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(parse_version("v5.2"), (5, 2))
         self.assertEqual(parse_version("v6.0.1"), (6, 0, 1))
         self.assertTrue(parse_version("v6.0") > parse_version("v5.2"))
+        self.assertTrue(parse_version("v6.1") > parse_version("v6.0"))
         self.assertTrue(parse_version("v5.2.1") > parse_version("v5.2"))
         self.assertFalse(parse_version("v5.1") > parse_version("v5.2"))
 

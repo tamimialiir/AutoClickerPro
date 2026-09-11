@@ -34,7 +34,7 @@ class AutoClickerApp:
         self.root.title("Auto Clicker Pro")
         self.root.configure(bg=Theme.BASE)
         self.root.resizable(False, False)
-        self.version = "v6.0"
+        self.version = "v6.1"
         self.repo_slug = "tamimialiir/AutoClickerPro"
         self.github_url = f"https://github.com/{self.repo_slug}"
 
@@ -67,6 +67,7 @@ class AutoClickerApp:
         self.s_hotkey_enabled = tk.BooleanVar(value=True)
         self.rs_hotkey_enabled = tk.BooleanVar(value=True)
         self.re_hotkey_enabled = tk.BooleanVar(value=True)
+        self.show_ripple_var = tk.BooleanVar(value=True)
 
         # Initialize Subsystem Managers (Composition)
         self.hotkey_manager = HotkeyManager(is_focus_on_input=self.is_focus_on_input)
@@ -221,6 +222,7 @@ class AutoClickerApp:
             "record_start_enabled": self.rs_hotkey_enabled.get(),
             "record_stop_enabled": self.re_hotkey_enabled.get(),
             "always_on_top": self.always_on_top.get(),
+            "show_ripple": self.show_ripple_var.get(),
         }
         path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON Profile", "*.json")])
         if path:
@@ -272,6 +274,8 @@ class AutoClickerApp:
 
             self.always_on_top.set(data["always_on_top"])
             self.toggle_topmost()
+
+            self.show_ripple_var.set(data.get("show_ripple", True))
 
             self.list_manager.selected_index = None
             self.edit_btn.config(state="disabled")

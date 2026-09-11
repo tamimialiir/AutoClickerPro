@@ -29,6 +29,7 @@ class ActionPoint:
     dy: int = 0                # scroll delta y
     delay: int = 500           # ms for wait action
     key: str = "a"             # key combo for key action
+    enabled: bool = True       # whether action executes or is temporarily muted
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to standard profile dictionary."""
@@ -53,6 +54,7 @@ class ActionPoint:
             dy=int(data.get("dy", 0)),
             delay=max(0, int(data.get("delay", 500))),
             key=data.get("key", "a"),
+            enabled=bool(data.get("enabled", True)),
         )
 
     # Dictionary compatibility layer to avoid breaking existing popups or list logic

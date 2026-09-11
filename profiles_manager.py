@@ -66,6 +66,7 @@ class ProfilesManager:
                 "record_start_enabled": bool(data.get("record_start_enabled", True)),
                 "record_stop_enabled": bool(data.get("record_stop_enabled", True)),
                 "always_on_top": bool(data.get("always_on_top", False)),
+                "show_ripple": bool(data.get("show_ripple", True)),
             }
             logger.info(f"Successfully loaded profile from: {path} with {len(points)} points.")
             return result

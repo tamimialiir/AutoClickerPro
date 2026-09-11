@@ -41,6 +41,42 @@ class TestPopupsIntegration(unittest.TestCase):
         self.app.click_listener = None
         self.app.restore_after_capture()
 
+    def test_start_add_point_click_types(self):
+        from pynput.mouse import Button
+        captured = []
+        original_finish = self.app.finish_add_point_and_edit
+        self.app.finish_add_point_and_edit = lambda action, data: captured.append((action, data))
+
+        try:
+            self.app.start_add_point("click")
+            on_click = self.app.click_listener.on_click
+
+            def fire_click(bx, by, btn):
+                try:
+                    on_click(bx, by, btn, True)
+                except Exception:
+                    pass
+
+            fire_click(10, 20, Button.left)
+            self.root.update()
+            self.assertEqual(captured[-1][1]["type"], "Left")
+
+            self.app.adding_mode = "click"
+            fire_click(30, 40, Button.right)
+            self.root.update()
+            self.assertEqual(captured[-1][1]["type"], "Right")
+
+            self.app.adding_mode = "click"
+            fire_click(50, 60, Button.middle)
+            self.root.update()
+            self.assertEqual(captured[-1][1]["type"], "Middle")
+        finally:
+            self.app.finish_add_point_and_edit = original_finish
+            if self.app.click_listener and self.app.click_listener.is_alive():
+                self.app.click_listener.stop()
+            self.app.click_listener = None
+            self.app.restore_after_capture()
+
     def test_edit_popup_with_point(self):
         # Add sample point
         p = ActionPoint(action=ActionType.CLICK, x=100, y=150)

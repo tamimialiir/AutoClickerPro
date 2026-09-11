@@ -146,7 +146,7 @@ def open_add_popup(self, action, data):
                 new_p["type"] = entries["type"].get()
                 new_p["delay_after"] = int(entries["delay_after"].get())
                 
-            self.points.append(new_p)
+            self.points.append(ActionPoint.from_dict(new_p))
             self.refresh_points_list()
             self.select_index(len(self.points) - 1)
             self.status_label.config(text=("Click" if action == "click" else "Drag") + " point added", fg=SUCCESS)
@@ -794,12 +794,11 @@ def start_add_point(self, mode):
         fg=WARN)
         
     def on_click(x, y, button, pressed):
-        if button != Button.left:
-            return
+        btn_name = {Button.right: "Right", Button.middle: "Middle"}.get(button, "Left")
         if self.adding_mode == "click" and pressed:
             self.root.after(0, self.finish_add_point_and_edit, "click",
                               {"x": x, "y": y, "hold": 50, "count": 1,
-                               "delay_after": 100, "type": "Left", "name": ""})
+                               "delay_after": 100, "type": btn_name, "name": ""})
             return False
         if self.adding_mode == "drag" and pressed:
             self.temp_drag_start = (x, y)
@@ -843,7 +842,7 @@ def start_add_scroll(self):
     self.status_label.config(text="Click to set scroll position...", fg=WARN)
     
     def on_click(x, y, button, pressed):
-        if button != Button.left or not pressed:
+        if not pressed:
             return True
         def finish():
             if self.click_listener:

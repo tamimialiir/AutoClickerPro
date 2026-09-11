@@ -1,6 +1,6 @@
 """
 List management module for Auto Clicker Pro.
-Handles point sequence ordering, drag-and-drop reordering, copy/cut/paste, and visual formatting.
+Handles point sequence ordering, ActionCards synchronization, copy/cut/paste, and visual formatting.
 """
 
 import copy
@@ -14,25 +14,23 @@ logger = get_logger("ListManager")
 class ListManager:
     def __init__(self, app):
         self.app = app
-        self.drag_start_index: Optional[int] = None
-        self.drag_current_index: Optional[int] = None
         self.selected_index: Optional[int] = None
         self.clipboard_point: Optional[Any] = None
 
     @property
-    def points_listbox(self) -> tk.Listbox:
-        return self.app.gui.points_listbox
+    def cards_view(self):
+        return getattr(self.app.gui, "action_cards_view", None)
+
+    @property
+    def points_listbox(self):
+        # Backwards-compatibility property returning cards_view
+        return self.cards_view
 
     def bind_list_shortcuts(self):
-        """Bind keyboard and mouse interactions to the listbox and window."""
-        self.points_listbox.bind("<<ListboxSelect>>", self.on_point_select)
-        self.points_listbox.bind("<Double-Button-1>", lambda e: self.app.open_edit_popup())
-        self.points_listbox.bind("<ButtonPress-1>", self.on_list_drag_start)
-        self.points_listbox.bind("<B1-Motion>", self.on_list_drag_motion)
-        self.points_listbox.bind("<ButtonRelease-1>", self.on_list_drag_drop)
-
-        self.points_listbox.bind("<Delete>", self.on_list_delete)
+        """Bind keyboard shortcuts to the window."""
         self.app.root.bind("<Delete>", self.on_list_delete)
+        self.app.root.bind("<Up>", self.on_arrow_up)
+        self.app.root.bind("<Down>", self.on_arrow_down)
 
         for mod in ("Control", "Command"):
             self.app.root.bind(f"<{mod}-c>", lambda e: self.on_list_copy(e))
@@ -41,6 +39,24 @@ class ListManager:
             self.app.root.bind(f"<{mod}-X>", lambda e: self.on_list_cut(e))
             self.app.root.bind(f"<{mod}-v>", lambda e: self.on_list_paste(e))
             self.app.root.bind(f"<{mod}-V>", lambda e: self.on_list_paste(e))
+
+    def on_arrow_up(self, event=None):
+        if self.app.is_focus_on_input() or self.app.is_busy():
+            return
+        if self.selected_index is not None and self.selected_index > 0:
+            self.select_index(self.selected_index - 1)
+        elif self.selected_index is None and self.app.points:
+            self.select_index(len(self.app.points) - 1)
+        return "break"
+
+    def on_arrow_down(self, event=None):
+        if self.app.is_focus_on_input() or self.app.is_busy():
+            return
+        if self.selected_index is not None and self.selected_index < len(self.app.points) - 1:
+            self.select_index(self.selected_index + 1)
+        elif self.selected_index is None and self.app.points:
+            self.select_index(0)
+        return "break"
 
     def on_list_delete(self, event=None):
         if self.app.is_focus_on_input() or self.app.is_busy():
@@ -69,6 +85,9 @@ class ListManager:
         self.refresh_points_list()
         if self.app.points:
             self.select_index(min(idx, len(self.app.points) - 1))
+        else:
+            self.selected_index = None
+            self.app.gui.edit_btn.config(state="disabled")
         self.app.status_label.config(text="Item cut", fg=Theme.YELLOW)
         return "break"
 
@@ -89,151 +108,46 @@ class ListManager:
         self.app.status_label.config(text="Item pasted", fg=Theme.GREEN)
         return "break"
 
-    def on_list_drag_start(self, event):
-        if self.app.is_busy():
-            self.drag_start_index = None
-            self.drag_current_index = None
-            return
-        index = self.points_listbox.nearest(event.y)
-        if not (0 <= index < len(self.app.points)):
-            self.drag_start_index = None
-            self.drag_current_index = None
-            return
-        self.drag_start_index = index
-        self.drag_current_index = index
-        self.points_listbox.selection_clear(0, tk.END)
-        self.points_listbox.selection_set(index)
-        self.points_listbox.activate(index)
-
-    def on_list_drag_motion(self, event):
-        if self.app.is_busy() or self.drag_start_index is None:
-            return
-        new_index = self.points_listbox.nearest(event.y)
-        if new_index == self.drag_current_index or not (0 <= new_index < len(self.app.points)):
-            return
-        item = self.app.points.pop(self.drag_current_index)
-        self.app.points.insert(new_index, item)
-        self.drag_current_index = new_index
-        self.refresh_points_list()
-        self.points_listbox.selection_clear(0, tk.END)
-        self.points_listbox.selection_set(new_index)
-        self.points_listbox.activate(new_index)
-        self.points_listbox.see(new_index)
-
-    def on_list_drag_drop(self, event):
-        if self.drag_start_index is not None and self.drag_current_index is not None:
-            self.selected_index = self.drag_current_index
-            self.app.gui.edit_btn.config(state="normal")
-            if self.drag_start_index != self.drag_current_index:
-                self.app.status_label.config(text="Order changed", fg=Theme.GREEN)
-            self.drag_start_index = None
-            self.drag_current_index = None
-
-    def on_point_select(self, event=None):
-        if self.app.is_busy():
-            return
-        sel = self.points_listbox.curselection()
-        if sel:
-            self.selected_index = sel[0]
-            self.app.gui.edit_btn.config(state="normal")
-        else:
-            if self.selected_index is None:
-                self.app.gui.edit_btn.config(state="disabled")
-
     def highlight_current(self, index: int):
         """Highlight current active step during execution."""
         try:
-            old_state = self.points_listbox.cget("state")
-            if old_state == "disabled":
-                self.points_listbox.config(state="normal")
-            self.points_listbox.selection_clear(0, tk.END)
-            if 0 <= index < self.points_listbox.size():
-                self.points_listbox.selection_set(index)
-                self.points_listbox.activate(index)
-                self.points_listbox.see(index)
-            if old_state == "disabled":
-                self.points_listbox.config(state="disabled")
+            if self.cards_view:
+                self.cards_view.highlight_current(index)
         except Exception as e:
             logger.debug(f"Error highlighting current step {index}: {e}")
 
     def clear_highlight(self):
-        """Clear listbox selection highlighting."""
+        """Clear list selection highlighting."""
         try:
-            old_state = self.points_listbox.cget("state")
-            if old_state == "disabled":
-                self.points_listbox.config(state="normal")
-            self.points_listbox.selection_clear(0, tk.END)
-            if old_state == "disabled":
-                self.points_listbox.config(state="disabled")
+            if self.cards_view:
+                self.cards_view.clear_highlight()
         except Exception as e:
             logger.debug(f"Error clearing highlight: {e}")
 
     def refresh_points_list(self):
-        """Update items and visual formatting in the points Listbox."""
+        """Update items and visual formatting in the points view."""
         try:
-            old_state = self.points_listbox.cget("state")
-            if old_state == "disabled":
-                self.points_listbox.config(state="normal")
+            if self.cards_view:
+                self.cards_view.render(self.app.points, selected_index=self.selected_index)
         except Exception as e:
-            logger.debug(f"Error checking listbox state: {e}")
-            old_state = "normal"
-
-        self.points_listbox.delete(0, tk.END)
-        emoji_map = {
-            "click":  "🖱️",
-            "drag":   "↔️ ",
-            "scroll": "↕️ ",
-            "wait":   "⏱️  ",
-            "key":    "⌨️  ",
-        }
-
-        for i, p in enumerate(self.app.points, 1):
-            name = p.get("name", "").strip()
-            action = p.get("action", "click")
-            emoji = emoji_map.get(action, "🖱️ ")
-            prefix = f"{i:02d}. {emoji}"
-            if name:
-                prefix += f"{name}: "
-
-            if action == "drag":
-                text = f"{prefix}DRAG ({p['x']},{p['y']}) → ({p['drag_x']},{p['drag_y']}) x{p.get('count', 1)}"
-            elif action == "wait":
-                text = f"{prefix}WAIT {p.get('delay', 500)}ms"
-            elif action == "key":
-                text = f"{prefix}KEY '{p.get('key', '?')}' x{p.get('count', 1)}"
-            elif action == "scroll":
-                direction = "UP" if p.get("dy", 0) > 0 else "DOWN"
-                text = f"{prefix}SCROLL {direction} ({p.get('x', 0)},{p.get('y', 0)}) x{p.get('count', 1)}"
-            else:
-                text = f"{prefix}CLICK ({p['x']},{p['y']}) {p.get('type', 'Left')} x{p.get('count', 1)}"
-                action = "click"
-
-            self.points_listbox.insert(tk.END, text)
-            idx = self.points_listbox.size() - 1
-            color = Theme.ACTION_COLORS.get(action, Theme.TEXT)
-            self.points_listbox.itemconfig(idx, foreground=color)
-
-        try:
-            if old_state == "disabled":
-                self.points_listbox.config(state="disabled")
-        except Exception as e:
-            logger.debug(f"Error restoring listbox disabled state: {e}")
+            logger.debug(f"Error refreshing points view: {e}")
 
     def select_index(self, index: int):
         """Select a specific item by index."""
         if not self.app.points:
             self.selected_index = None
-            self.app.gui.edit_btn.config(state="disabled")
-            self.points_listbox.selection_clear(0, tk.END)
+            if hasattr(self.app.gui, "edit_btn") and self.app.gui.edit_btn:
+                self.app.gui.edit_btn.config(state="disabled")
+            if self.cards_view:
+                self.cards_view.selection_clear(0)
             return
 
         index = max(0, min(index, len(self.app.points) - 1))
         self.selected_index = index
-        self.points_listbox.selection_clear(0, tk.END)
-        self.points_listbox.selection_set(index)
-        self.points_listbox.activate(index)
-        self.points_listbox.see(index)
-        self.app.gui.edit_btn.config(state="normal")
+        if self.cards_view:
+            self.cards_view.select(index)
+        if hasattr(self.app.gui, "edit_btn") and self.app.gui.edit_btn:
+            self.app.gui.edit_btn.config(state="normal")
 
     def move_up(self):
         """Move selected point up in the list."""
@@ -244,6 +158,11 @@ class ListManager:
         self.refresh_points_list()
         self.select_index(i - 1)
 
+    def on_cards_reordered(self):
+        """Callback when cards have been reordered via drag-and-drop."""
+        if hasattr(self.app, "status_label") and self.app.status_label:
+            self.app.status_label.config(text="Order changed", fg=Theme.GREEN)
+
     def move_down(self):
         """Move selected point down in the list."""
         if self.selected_index is None or self.selected_index >= len(self.app.points) - 1 or self.app.is_busy():
@@ -253,19 +172,29 @@ class ListManager:
         self.refresh_points_list()
         self.select_index(i + 1)
 
+    def remove_point_at(self, index: int):
+        """Remove point at specific index (used by quick-action delete on card)."""
+        if self.app.is_busy():
+            return
+        if 0 <= index < len(self.app.points):
+            del self.app.points[index]
+            if self.selected_index == index:
+                self.selected_index = min(index, len(self.app.points) - 1) if self.app.points else None
+            elif self.selected_index is not None and self.selected_index > index:
+                self.selected_index -= 1
+            self.refresh_points_list()
+            if self.selected_index is not None:
+                self.select_index(self.selected_index)
+            else:
+                if hasattr(self.app.gui, "edit_btn") and self.app.gui.edit_btn:
+                    self.app.gui.edit_btn.config(state="disabled")
+            self.app.status_label.config(text="Point removed", fg=Theme.YELLOW)
+
     def remove_point(self):
         """Delete currently selected point."""
         if self.app.is_busy() or self.selected_index is None:
             return
-        idx = self.selected_index
-        del self.app.points[idx]
-        self.refresh_points_list()
-        if self.app.points:
-            self.select_index(min(idx, len(self.app.points) - 1))
-        else:
-            self.selected_index = None
-            self.app.gui.edit_btn.config(state="disabled")
-        self.app.status_label.config(text="Point removed", fg=Theme.YELLOW)
+        self.remove_point_at(self.selected_index)
 
     def clear_points(self):
         """Remove all points from the sequence."""
@@ -273,6 +202,7 @@ class ListManager:
             return
         self.app.points.clear()
         self.selected_index = None
-        self.app.gui.edit_btn.config(state="disabled")
+        if hasattr(self.app.gui, "edit_btn") and self.app.gui.edit_btn:
+            self.app.gui.edit_btn.config(state="disabled")
         self.refresh_points_list()
         self.app.status_label.config(text="All points cleared", fg=Theme.YELLOW)

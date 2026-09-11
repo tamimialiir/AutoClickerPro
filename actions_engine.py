@@ -11,6 +11,7 @@ from pynput.mouse import Controller as MouseController, Button
 from pynput.keyboard import Controller as KeyboardController
 from utils import parse_key_combo, str_to_key
 from theme import Theme
+from widgets import show_click_ripple
 from logger import get_logger
 
 logger = get_logger("ActionsEngine")
@@ -72,6 +73,17 @@ class ActionsEngine:
 
         try:
             self.mouse.position = (x, y)
+
+            if getattr(self.app, "show_ripple_var", None) and self.app.show_ripple_var.get():
+                color = Theme.GREEN
+                if typ == "Right":
+                    color = Theme.BLUE
+                elif typ == "Middle":
+                    color = Theme.YELLOW
+                elif typ == "Double":
+                    color = Theme.PEACH
+                self.app.root.after(0, lambda rx=x, ry=y, c=color: show_click_ripple(self.app.root, rx, ry, c))
+
             if typ == "Double":
                 self.mouse.click(btn, 2)
             else:
@@ -90,6 +102,10 @@ class ActionsEngine:
 
         try:
             self.mouse.position = (sx, sy)
+
+            if getattr(self.app, "show_ripple_var", None) and self.app.show_ripple_var.get():
+                self.app.root.after(0, lambda rx=sx, ry=sy: show_click_ripple(self.app.root, rx, ry, Theme.MAUVE))
+
             self.mouse.press(Button.left)
             steps = max(8, int(duration * 50))
             for i in range(1, steps + 1):
@@ -149,6 +165,12 @@ class ActionsEngine:
                     break
 
                 p = self.app.points[idx]
+
+                # Skip disabled (muted) action points
+                if not p.get("enabled", True):
+                    idx += 1
+                    continue
+
                 self.current_step_index = idx
                 total_points = len(self.app.points)
 
