@@ -4,12 +4,35 @@ Integration tests for popup invocations and screen capture listeners.
 
 import unittest
 import tkinter as tk
+from unittest.mock import patch
 from main import AutoClickerApp
 from models import ActionPoint, ActionType
+
+
+class MockListener:
+    def __init__(self, on_click=None, on_press=None, **kwargs):
+        self.on_click = on_click
+        self.on_press = on_press
+        self._alive = False
+
+    def start(self):
+        self._alive = True
+
+    def is_alive(self):
+        return self._alive
+
+    def stop(self):
+        self._alive = False
+
 
 class TestPopupsIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.mouse_patcher = patch("popups.mouse.Listener", side_effect=lambda **kw: MockListener(**kw))
+        cls.kb_patcher = patch("hotkey_manager.KeyboardListener", side_effect=lambda **kw: MockListener(**kw))
+        cls.mouse_patcher.start()
+        cls.kb_patcher.start()
+
         cls.root = tk.Tk()
         cls.app = AutoClickerApp(cls.root)
         cls.root.update()
@@ -17,6 +40,8 @@ class TestPopupsIntegration(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.app.exit_app()
+        cls.mouse_patcher.stop()
+        cls.kb_patcher.stop()
 
     def test_selected_index_property(self):
         self.assertIsNone(self.app.selected_index)
@@ -90,6 +115,7 @@ class TestPopupsIntegration(unittest.TestCase):
             self.app.clear_previews()
             self.app.points.clear()
             self.app.selected_index = None
+
 
 if __name__ == "__main__":
     unittest.main()
