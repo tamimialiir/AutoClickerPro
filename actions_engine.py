@@ -17,16 +17,36 @@ from logger import get_logger
 logger = get_logger("ActionsEngine")
 
 class ActionsEngine:
-    def __init__(self, app):
+    def __init__(self, app, mouse=None, keyboard=None):
         self.app = app
-        self.mouse = MouseController()
-        self.keyboard = KeyboardController()
+        self._mouse = mouse
+        self._keyboard = keyboard
 
         self.is_running = False
         self.is_paused = False
         self.stop_flag = False
         self.current_cycle = 0
         self.current_step_index = 0
+
+    @property
+    def mouse(self):
+        if self._mouse is None:
+            self._mouse = MouseController()
+        return self._mouse
+
+    @mouse.setter
+    def mouse(self, val):
+        self._mouse = val
+
+    @property
+    def keyboard(self):
+        if self._keyboard is None:
+            self._keyboard = KeyboardController()
+        return self._keyboard
+
+    @keyboard.setter
+    def keyboard(self, val):
+        self._keyboard = val
 
     def apply_pos_random(self, x: int, y: int, pos_rand: int) -> tuple:
         """Apply random position jitter within [-pos_rand, +pos_rand] pixels."""
