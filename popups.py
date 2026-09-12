@@ -4,7 +4,7 @@ import copy
 from pynput import mouse
 from pynput.mouse import Button
 from pynput.keyboard import Listener as KeyboardListener
-from utils import key_to_str, ACTION_COLORS
+from utils import key_to_str
 from theme import Theme
 from models import ActionPoint
 from logger import get_logger

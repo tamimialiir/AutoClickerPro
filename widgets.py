@@ -516,13 +516,13 @@ class ActionCard(tk.Frame):
         for w in (self.grip_lbl, self.index_label, self.title_label, self.badges_frame, self.right_ctrls, self.del_btn):
             try:
                 w.config(bg=bg_color)
-            except Exception:
-                pass
+            except tk.TclError as e:
+                logger.debug(f"Child background update skipped: {e}")
         try:
             self.enable_switch.config(bg=bg_color)
             self.enable_switch.draw()
-        except Exception:
-            pass
+        except tk.TclError as e:
+            logger.debug(f"Enable switch background update skipped: {e}")
 
 
 class ActionCardsView(tk.Frame):
@@ -707,8 +707,8 @@ class ActionCardsView(tk.Frame):
                 self.canvas.yview_scroll(-1, "units")
             elif mouse_y_root > canvas_y + canvas_h - 20:
                 self.canvas.yview_scroll(1, "units")
-        except Exception:
-            pass
+        except (tk.TclError, RuntimeError) as e:
+            logger.debug(f"Auto-scroll on drag skipped: {e}")
 
         if self.on_select:
             self.on_select(target_idx)
@@ -894,7 +894,7 @@ class ClickRippleOverlay:
             transparent_key = "#010101"
             try:
                 self.win.attributes("-transparentcolor", transparent_key)
-            except Exception:
+            except tk.TclError:
                 transparent_key = Theme.BASE
 
             self.win.geometry(f"{size}x{size}+{self.x - size // 2}+{self.y - size // 2}")
@@ -910,7 +910,7 @@ class ClickRippleOverlay:
             if hasattr(self, "win") and self.win:
                 try:
                     self.win.destroy()
-                except Exception:
+                except tk.TclError:
                     pass
 
     def _animate(self):
@@ -922,7 +922,7 @@ class ClickRippleOverlay:
             if self.current_step >= self.max_steps:
                 try:
                     self.win.destroy()
-                except Exception:
+                except tk.TclError:
                     pass
                 return
 
@@ -952,8 +952,8 @@ class ClickRippleOverlay:
 
             self.current_step += 1
             self.root.after(20, self._animate)
-        except Exception:
-            pass
+        except (tk.TclError, RuntimeError) as e:
+            logger.debug(f"Ripple animation step skipped: {e}")
 
 
 def show_click_ripple(root: tk.Tk, x: int, y: int, color: str = "#22c55e"):

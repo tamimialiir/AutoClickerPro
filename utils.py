@@ -103,11 +103,7 @@ def parse_key_combo(combo):
             modifiers.append(SPECIAL_KEYS[p])
     return modifiers, main
 
-# Colors for action types in the points list (Catppuccin-inspired)
-ACTION_COLORS = {
-    "click":  "#a6e3a1",  # green
-    "drag":   "#89b4fa",  # blue
-    "scroll": "#cba6f7",  # purple
-    "wait":   "#f9e2af",  # yellow
-    "key":    "#fab387",  # peach / orange
-}
+from theme import Theme
+
+# Action type colors mapped to centralized Theme definition (single source of truth)
+ACTION_COLORS = Theme.ACTION_COLORS
