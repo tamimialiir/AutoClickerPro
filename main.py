@@ -5,6 +5,7 @@ Orchestrates components using Composition (ActionsEngine, RecorderEngine, ListMa
 
 import sys
 import os
+import webbrowser
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
